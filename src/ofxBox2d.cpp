@@ -177,6 +177,28 @@ void ofxBox2d::registerTouchGrabbing() {
 	ofAddListener(ofEvents().touchUp, this, &ofxBox2d::touchUp);
 }
 
+// ------------------------------------------------------
+void ofxBox2d::unregisterMouseGrabbing() {
+	ofRemoveListener(ofEvents().mousePressed, this, &ofxBox2d::mousePressed);
+	ofRemoveListener(ofEvents().mouseDragged, this, &ofxBox2d::mouseDragged);
+	ofRemoveListener(ofEvents().mouseReleased, this, &ofxBox2d::mouseReleased);
+	// stop grabbing
+	grabShapeUp(0, 0, -1);
+}
+
+// ------------------------------------------------------
+void ofxBox2d::unregisterTouchGrabbing() {
+	ofRemoveListener(ofEvents().touchDown, this, &ofxBox2d::mousePressed);
+	ofRemoveListener(ofEvents().touchMoved, this, &ofxBox2d::mouseDragged);
+	ofRemoveListener(ofEvents().touchUp, this, &ofxBox2d::mouseReleased);
+	// stop grabbing
+	for (pair<int, b2Body*> touch : grabBodies) {
+		if (touch.first == -1) continue;
+		grabShapeUp(0, 0, touch.first);
+	}
+}
+
+// ------------------------------------------------------
 void ofxBox2d::touchDown(ofTouchEventArgs &touch) {
 	grabShapeDown(touch.x, touch.y, touch.id);
 }

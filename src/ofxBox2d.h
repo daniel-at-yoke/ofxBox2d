@@ -121,6 +121,8 @@ public:
 	void registerGrabbing();
 	void registerMouseGrabbing();
 	void registerTouchGrabbing();
+	void unregisterMouseGrabbing();
+	void unregisterTouchGrabbing();
 
 	void grabShapeDown(float x, float y, int id = -1 );		// -1 is reserved for mouse.
 	void grabShapeUp(float x, float y, int id = -1 );		// -1 is reserved for mouse.
