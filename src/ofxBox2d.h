@@ -63,11 +63,8 @@ public:
 	b2BodyDef			bd;
 	b2Body*				m_bomb;
 	
-	map<int, b2MouseJoint*> touchJoints;
-	map<int, b2Body*>       touchBodies;
-
-	b2MouseJoint*		mouseJoint;    
-	b2Body*				mouseBody;
+	map<int, b2MouseJoint*> grabJoints;
+	map<int, b2Body*>       grabBodies;
 
 	b2Body*				ground;
 	b2Body*				mainBody;
