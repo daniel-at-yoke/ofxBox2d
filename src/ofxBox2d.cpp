@@ -34,7 +34,7 @@ float ofxBox2d::toB2d(float f) {
 	return f / ofxBox2d::scale;
 }
 
-#define VERIFY_WORLD_INITED(retVal) if (!world) { ofLogWarning(__FUNCTION__) << "World not inited"; return retVal; }
+#define VERIFY_WORLD_INITED() if (!world) { ofLogWarning(__FUNCTION__) << "World not inited"; return; }
 
 // ------------------------------------------------------ 
 ofxBox2d::ofxBox2d() {
@@ -44,8 +44,6 @@ ofxBox2d::ofxBox2d() {
 	
 	ground = NULL;
 	mainBody = NULL;
-
-	VERIFY_WORLD_INITED()
 }
 
 // ------------------------------------------------------
@@ -332,7 +330,11 @@ void ofxBox2d::setGravity(float x, float y) {
 
 //--------------------------------------------------------------
 ofPoint ofxBox2d::getGravity() {
-	VERIFY_WORLD_INITED(ofPoint());
+	if (!world) {
+		ofLogWarning(__FUNCTION__) << "World not inited";
+		return ofPoint();
+	}
+
     return ofPoint(world->GetGravity().x, world->GetGravity().y);
 }
 
