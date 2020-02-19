@@ -218,7 +218,7 @@ void ofxBox2d::grabShapeDown(float x, float y, int id) {
 	
 	b2Vec2 p(x/ofxBox2d::scale, y/ofxBox2d::scale);
         
-	if (grabJoints[id] == NULL) {
+	if (grabJoints[id] == NULL && grabBodies[id] == NULL) {
         b2BodyDef bd;
         grabBodies[id] = world->CreateBody(&bd);
     
@@ -258,12 +258,12 @@ void ofxBox2d::grabShapeUp(float x, float y, int id) {
 		return;
 	}
 
-	if (grabJoints[id]) {
-		world->DestroyJoint(grabJoints[id]);
-		grabJoints.erase(id);
-		world->DestroyBody(grabBodies[id]);
-		grabBodies.erase(id);
-	}
+	// A joint may not have been created on grabDown, so check before attempting destroy
+	if (grabJoints[id]) world->DestroyJoint(grabJoints[id]);
+	grabJoints.erase(id);
+	
+	if (grabBodies[id]) world->DestroyBody(grabBodies[id]);
+	grabBodies.erase(id);
 }
 
 // ------------------------------------------------------ 
