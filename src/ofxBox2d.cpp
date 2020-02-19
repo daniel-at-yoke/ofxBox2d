@@ -34,6 +34,8 @@ float ofxBox2d::toB2d(float f) {
 	return f / ofxBox2d::scale;
 }
 
+#define VERIFY_WORLD_INITED(retVal) if (!world) { ofLogWarning(__FUNCTION__) << "World not inited"; return retVal; }
+
 // ------------------------------------------------------ 
 ofxBox2d::ofxBox2d() {
     enableContactEvents = false;
@@ -42,6 +44,8 @@ ofxBox2d::ofxBox2d() {
 	
 	ground = NULL;
 	mainBody = NULL;
+
+	VERIFY_WORLD_INITED()
 }
 
 // ------------------------------------------------------
@@ -120,13 +124,10 @@ void ofxBox2d::init(float _hz, float _gx, float _gy) {
         ground = nullptr;
     }
 
-	//worldAABB.lowerBound.Set(-100.0f, -100.0f);
-	//worldAABB.upperBound.Set(100.0f, 100.0f);
 	delete world;
     world = nullptr;
 	world = new b2World(b2Vec2(gravity.x, gravity.y));
     world->SetAllowSleeping(doSleep);
-	//world->SetDebugDraw(&debugRender);
 	
 	// set the hz and interaction cycles
 	hz = _hz;
@@ -134,7 +135,7 @@ void ofxBox2d::init(float _hz, float _gx, float _gy) {
 	positionIterations = 3;
 	particleIterations = world->CalculateReasonableParticleIterations(hz);
 	
-	ofLog(OF_LOG_NOTICE, "ofxBox2d:: - world created -");
+	ofLogVerbose(__FUNCTION__) << "World created";
 }
 
 // ------------------------------------------------------ enable events
@@ -153,14 +154,9 @@ void ofxBox2d::disableEvents() {
 
 // ------------------------------------------------------ grab shapes
 void ofxBox2d::setContactListener(ofxBox2dContactListener * listener) {
-	
-	if(world != NULL) {
-		bHasContactListener = true;
-		world->SetContactListener(listener);
-	}
-	else {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - world not inited -");
-	}
+	VERIFY_WORLD_INITED();
+	bHasContactListener = true;
+	world->SetContactListener(listener);
 }
 
 // ------------------------------------------------------ grab shapes Events
@@ -209,10 +205,7 @@ void ofxBox2d::mouseReleased(ofMouseEventArgs &e) {
 
 // ------------------------------------------------------ 
 void ofxBox2d::grabShapeDown(float x, float y, int id) {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
 	if (!bEnableGrabbing) return;
 	
@@ -253,10 +246,7 @@ void ofxBox2d::grabShapeDown(float x, float y, int id) {
 
 // ------------------------------------------------------ 
 void ofxBox2d::grabShapeUp(float x, float y, int id) {
-	if (world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 
 	// A joint may not have been created on grabDown, so check before attempting destroy
 	if (grabJoints[id]) world->DestroyJoint(grabJoints[id]);
@@ -290,10 +280,7 @@ int	ofxBox2d::getJointCount() {
 
 // ------------------------------------------------------ wake up
 void ofxBox2d::wakeupShapes() {
-    if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
     b2Body* bodies = world->GetBodyList();
     while(bodies) {
@@ -310,7 +297,7 @@ void ofxBox2d::wakeupShapes() {
 void ofxBox2d::setFPS(float _hz) {
 	hz = _hz;
 	particleIterations = world->CalculateReasonableParticleIterations(hz);
-	ofLogNotice() << "particleIterations " << ofToString(particleIterations);
+	ofLogVerbose(__FUNCTION__) << "particleIterations " << ofToString(particleIterations);
 }
 
 #pragma mark - gravity
@@ -331,15 +318,13 @@ void ofxBox2d::setGravityY(float y) {
 
 //--------------------------------------------------------------
 void ofxBox2d::setGravity(float x, float y) {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
+
 	world->SetGravity(b2Vec2(x, y));
 	
 	// update the particle iteration based on gravity
 	particleIterations = world->CalculateReasonableParticleIterations(hz);
-	ofLogNotice() << "particleIterations " << ofToString(particleIterations);
+	ofLogVerbose(__FUNCTION__) << "particleIterations " << particleIterations;
 	
 	// wake up all shapes!
 	wakeupShapes();
@@ -347,10 +332,7 @@ void ofxBox2d::setGravity(float x, float y) {
 
 //--------------------------------------------------------------
 ofPoint ofxBox2d::getGravity() {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return ofPoint();
-	}
+	VERIFY_WORLD_INITED(ofPoint());
     return ofPoint(world->GetGravity().x, world->GetGravity().y);
 }
 
@@ -361,11 +343,7 @@ void ofxBox2d::setBounds(ofPoint lowBounds, ofPoint upBounds) {
 
 // ------------------------------------------------------ create Ground
 void ofxBox2d::createGround(float x1, float y1, float x2, float y2) {
-	
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
 	// if we have ground we need to destroy it
 	if(ground != NULL) {
@@ -393,11 +371,7 @@ void ofxBox2d::createBounds(ofRectangle rec) {
 
 // ------------------------------------------------------ create bounds
 void ofxBox2d::createBounds(float x, float y, float w, float h) {
-	
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
 	// if we have ground we need to destroy it
 	if(ground != NULL) {
@@ -446,48 +420,7 @@ void ofxBox2d::setIterations(int velocityTimes, int positionTimes) {
 
 // ------------------------------------------------------ 
 void ofxBox2d::update() {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
-	
-	// destroy the object if we are out of the bounds
-	if(bCheckBounds) {
-		/*
-		 float top = 0;
-		 float bottom = ofGetHeight();
-		 float right = ofGetWidth();
-		 float left = 0;
-		 
-		 b2Body* node = world->GetBodyList();
-		 while(node) {
-		 b2Body* b = node;
-		 node = node->GetNext();
-		 b2Vec2 p = b->GetPosition();
-		 ofxBox2dBaseShape* base = (ofxBox2dBaseShape*)b->GetUserData();
-		 if(base) {
-		 //printf("dead:%i\n", base->dead);
-		 
-		 if(p.y*OFX_BOX2D_SCALE > bottom) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 if(p.y*OFX_BOX2D_SCALE < top) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 if(p.x*OFX_BOX2D_SCALE > right) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 if(p.x*OFX_BOX2D_SCALE < left) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 */
-		
-		
-	}
+	VERIFY_WORLD_INITED();
 	
 	world->Step(getTimeStep(), velocityIterations, positionIterations, particleIterations);
 }
@@ -499,10 +432,8 @@ float ofxBox2d::getTimeStep() {
 
 // ------------------------------------------------------ 
 void ofxBox2d::drawGround() {
-	
 	if(ground == NULL) return;
 	
-// 	const b2Transform& xf = ground->GetTransform();
 	for (b2Fixture* f = ground->GetFixtureList(); f; f = f->GetNext()) {
 		b2EdgeShape * edge = (b2EdgeShape*)f->GetShape();
 		if(edge) {
@@ -518,3 +449,4 @@ void ofxBox2d::draw() {
 	drawGround();
 }
 
+#undef VERIFY_WORLD_INITED
