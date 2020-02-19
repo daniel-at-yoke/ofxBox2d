@@ -10,6 +10,8 @@ This is a simple wrapper for box2d using Openframeworks. The examples below are 
 Thanks,
 Todd
 
+**Note:** This fork has been modified to more generically allow multiple grab interactions (i.e. multitouch), instead of being specific to iOS/OpenGL ES devices. 
+
 Installation
 ------------
 

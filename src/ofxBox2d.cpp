@@ -34,66 +34,53 @@ float ofxBox2d::toB2d(float f) {
 	return f / ofxBox2d::scale;
 }
 
+#define VERIFY_WORLD_INITED(retVal) if (!world) { ofLogWarning(__FUNCTION__) << "World not inited"; return retVal; }
+
 // ------------------------------------------------------ 
 ofxBox2d::ofxBox2d() {
     enableContactEvents = false;
 	world = NULL;
 	m_bomb = NULL;
 	
-#ifdef TARGET_OPENGLES
-    // touch grabbing
-	for(int i=0; i<OF_MAX_TOUCH_JOINTS; i++) {
-		touchJoints[i] = NULL;
-	}
-	for(int i=0; i<OF_MAX_TOUCH_JOINTS; i++) {
-		touchBodies[i] = NULL;
-	}
-#else
-	
-    // mouse grabbing
-	mouseJoint = NULL;
-	mouseBody = NULL;
-#endif
 	ground = NULL;
 	mainBody = NULL;
+
+	VERIFY_WORLD_INITED()
 }
 
 // ------------------------------------------------------
 void ofxBox2d::clear() {
-	
-#ifdef TARGET_OPENGLES
-	// destroy touch grabbing bodies
-	for(int i=0; i<OF_MAX_TOUCH_JOINTS; i++) {
-		if(touchBodies[i]) {
-			if(world) world->DestroyBody(touchBodies[i]);
-		}
+	if (!world) return;
+
+	// destroy grabbing bodies and joints
+	for (pair<int, b2MouseJoint*> pair : grabJoints) {
+		world->DestroyJoint(pair.second);
 	}
-#else
-	// destroy mouse grabbing body
-	if(mouseBody) {
-		if(world) world->DestroyBody(mouseBody);
+
+	grabJoints.clear();
+
+	for (pair<int, b2Body*> pair : grabBodies) {
+		world->DestroyBody(pair.second);
 	}
-#endif
+
+	grabBodies.clear();
 	
-	if(world) {
-	
-		// Fix from: https://github.com/vanderlin/ofxBox2d/issues/62
-		b2Body* f = world->GetBodyList();
-		while (f) {
-			b2Body* next = f->GetNext();
-			world->DestroyBody(f);
-			f = next;
-		}
-		b2Joint* j = world->GetJointList();
-		while (j) {
-			b2Joint* next = j->GetNext();
-			world->DestroyJoint(j);
-			j = next;
-		}
-		// This is not safe... we are deleting the world on init so..
-		/* delete world;
-		world = NULL;*/
+	// Fix from: https://github.com/vanderlin/ofxBox2d/issues/62
+	b2Body* f = world->GetBodyList();
+	while (f) {
+		b2Body* next = f->GetNext();
+		world->DestroyBody(f);
+		f = next;
 	}
+	b2Joint* j = world->GetJointList();
+	while (j) {
+		b2Joint* next = j->GetNext();
+		world->DestroyJoint(j);
+		j = next;
+	}
+	// This is not safe... we are deleting the world on init so..
+	/* delete world;
+	world = NULL;*/
 }
 
 // ------------------------------------------------------
@@ -108,8 +95,7 @@ int ofxBox2d::calculateParticleIterations(float32 gravity, float32 radius, float
 	// but to avoid excessive cycle cost, don't recommend more than this.
 	const int32 B2_MAX_RECOMMENDED_PARTICLE_ITERATIONS = 8;
 	const float32 B2_RADIUS_THRESHOLD = 0.01f;
-	int32 iterations =
-	(int32) ceilf(b2Sqrt(gravity / (B2_RADIUS_THRESHOLD * radius)) * timeStep);
+	int32 iterations = (int32) ceilf(b2Sqrt(gravity / (B2_RADIUS_THRESHOLD * radius)) * timeStep);
 	return b2Clamp(iterations, 1, B2_MAX_RECOMMENDED_PARTICLE_ITERATIONS);
 }
 
@@ -121,25 +107,13 @@ void ofxBox2d::init(float _hz, float _gx, float _gy) {
 	// settings
 	bHasContactListener = false;
 	bCheckBounds		= false;
-	bEnableGrabbing		= true;
+	bEnableGrabbing     = true;
 	ofxBox2d::scale		= 30.0f;
 	doSleep				= true;
 	
 	// gravity
 	gravity.set(_gx, _gy);
-	
-#ifdef TARGET_OPENGLES    
-    // touch grabbing
-    for( int i=0; i<OF_MAX_TOUCH_JOINTS; i++ )
-		touchJoints[ i ] = nullptr;
-    for( int i=0; i<OF_MAX_TOUCH_JOINTS; i++ )
-		touchBodies[ i ] = nullptr;
-#else
-    // mouse grabbing
-	mouseJoint = nullptr;
-	mouseBody  = nullptr;
-#endif
-	
+
 	// ground/bounds
 	// debug drawer
 	debugRender.setScale(scale);
@@ -150,13 +124,10 @@ void ofxBox2d::init(float _hz, float _gx, float _gy) {
         ground = nullptr;
     }
 
-	//worldAABB.lowerBound.Set(-100.0f, -100.0f);
-	//worldAABB.upperBound.Set(100.0f, 100.0f);
 	delete world;
     world = nullptr;
 	world = new b2World(b2Vec2(gravity.x, gravity.y));
     world->SetAllowSleeping(doSleep);
-	//world->SetDebugDraw(&debugRender);
 	
 	// set the hz and interaction cycles
 	hz = _hz;
@@ -164,7 +135,7 @@ void ofxBox2d::init(float _hz, float _gx, float _gy) {
 	positionIterations = 3;
 	particleIterations = world->CalculateReasonableParticleIterations(hz);
 	
-	ofLog(OF_LOG_NOTICE, "ofxBox2d:: - world created -");
+	ofLogVerbose(__FUNCTION__) << "World created";
 }
 
 // ------------------------------------------------------ enable events
@@ -183,159 +154,116 @@ void ofxBox2d::disableEvents() {
 
 // ------------------------------------------------------ grab shapes
 void ofxBox2d::setContactListener(ofxBox2dContactListener * listener) {
-	
-	if(world != NULL) {
-		bHasContactListener = true;
-		world->SetContactListener(listener);
-	}
-	else {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - world not inited -");
-	}
+	VERIFY_WORLD_INITED();
+	bHasContactListener = true;
+	world->SetContactListener(listener);
 }
 
 // ------------------------------------------------------ grab shapes Events
 void ofxBox2d::registerGrabbing() {
-#ifdef TARGET_OPENGLES
-	ofAddListener(ofEvents().touchDown, this, &ofxBox2d::touchDown);
-	ofAddListener(ofEvents().touchMoved, this, &ofxBox2d::touchMoved);
-	ofAddListener(ofEvents().touchUp, this, &ofxBox2d::touchUp);
-#else
+	registerMouseGrabbing();
+	registerTouchGrabbing();
+}
+
+// ------------------------------------------------------ grab shapes Events
+void ofxBox2d::registerMouseGrabbing() {
 	ofAddListener(ofEvents().mousePressed, this, &ofxBox2d::mousePressed);
 	ofAddListener(ofEvents().mouseDragged, this, &ofxBox2d::mouseDragged);
 	ofAddListener(ofEvents().mouseReleased, this, &ofxBox2d::mouseReleased);
-#endif
 }
 
-#ifdef TARGET_OPENGLES
+// ------------------------------------------------------ grab shapes Events
+void ofxBox2d::registerTouchGrabbing() {
+	ofAddListener(ofEvents().touchDown, this, &ofxBox2d::touchDown);
+	ofAddListener(ofEvents().touchMoved, this, &ofxBox2d::touchMoved);
+	ofAddListener(ofEvents().touchUp, this, &ofxBox2d::touchUp);
+}
+
 void ofxBox2d::touchDown(ofTouchEventArgs &touch) {
 	grabShapeDown(touch.x, touch.y, touch.id);
 }
+
 void ofxBox2d::touchMoved(ofTouchEventArgs &touch) {
 	grabShapeDragged(touch.x, touch.y, touch.id);
 }
+
 void ofxBox2d::touchUp(ofTouchEventArgs &touch) {
 	grabShapeUp(touch.x, touch.y, touch.id);
 }
-#else
+
 void ofxBox2d::mousePressed(ofMouseEventArgs &e) {
 	grabShapeDown(e.x, e.y);
 }
+
 void ofxBox2d::mouseDragged(ofMouseEventArgs &e) {
 	grabShapeDragged(e.x, e.y);
 }
+
 void ofxBox2d::mouseReleased(ofMouseEventArgs &e) {
 	grabShapeUp(e.x, e.y);
 }
-#endif
 
 // ------------------------------------------------------ 
 void ofxBox2d::grabShapeDown(float x, float y, int id) {
+	VERIFY_WORLD_INITED();
 	
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
+	if (!bEnableGrabbing) return;
+	
+	b2Vec2 p(x/ofxBox2d::scale, y/ofxBox2d::scale);
+        
+	if (grabJoints[id] == NULL && grabBodies[id] == NULL) {
+        b2BodyDef bd;
+        grabBodies[id] = world->CreateBody(&bd);
+    
+	} else {
+		return; // bad grab
 	}
-	
-	if(bEnableGrabbing) {
-		b2Vec2 p(x/ofxBox2d::scale, y/ofxBox2d::scale);
-        
-#ifdef TARGET_OPENGLES  
-        if(id >= 0 && id < OF_MAX_TOUCH_JOINTS)
-        {
-            if(touchJoints[id] != NULL)
-               return;            
-            
-            if( touchBodies[id] == NULL) {
-                b2BodyDef bd;
-                touchBodies[id] = world->CreateBody(&bd);
-            }
-        }
-        else        
-            return;		// invalid mouse / touch id.
-#else
-      if (mouseJoint != NULL) {
-          return;
-      }
-            
-      if(mouseBody == NULL) {
-         b2BodyDef bd;
-         mouseBody = world->CreateBody(&bd);
-      }
-        
-#endif
 
-		// Make a small box.
-		b2AABB aabb;
-		b2Vec2 d;
-		d.Set(0.001f, 0.001f);
-		aabb.lowerBound = p - d;
-		aabb.upperBound = p + d;
+	// Make a small box.
+	b2AABB aabb;
+	b2Vec2 d;
+	d.Set(0.001f, 0.001f);
+	aabb.lowerBound = p - d;
+	aabb.upperBound = p + d;
 		
-		// Query the world for overlapping shapes.
-		QueryCallback callback(p);
-		world->QueryAABB(&callback, aabb);
+	// Query the world for overlapping shapes.
+	QueryCallback callback(p);
+	world->QueryAABB(&callback, aabb);
 		
-		if (callback.m_fixture) {
-			b2Body* body = callback.m_fixture->GetBody();
-			b2MouseJointDef md;                
-			md.bodyB    = body;
-			md.target   = p;
-			md.maxForce = 1000.0f * body->GetMass();
-#ifdef TARGET_OPENGLES
-            md.bodyA    = touchBodies[id];
-            touchJoints[id] = (b2MouseJoint*)world->CreateJoint(&md);
-#else
-            md.bodyA    = mouseBody;
-            mouseJoint  = (b2MouseJoint*)world->CreateJoint(&md);
-#endif           
+	if (callback.m_fixture) {
+		b2Body* body = callback.m_fixture->GetBody();
+		b2MouseJointDef md;                
+		md.bodyB    = body;
+		md.target   = p;
+		md.maxForce = 1000.0f * body->GetMass();
+
+		md.bodyA = grabBodies[id];
+		grabJoints[id] = (b2MouseJoint*)world->CreateJoint(&md);
                 
-			body->SetAwake(true);
-		}
-		
-		
+		body->SetAwake(true);
 	}
-	
 }
 
 // ------------------------------------------------------ 
 void ofxBox2d::grabShapeUp(float x, float y, int id) {
-#ifdef TARGET_OPENGLES     
-    if(id >= 0 && id < OF_MAX_TOUCH_JOINTS) {
-        if(touchJoints[id] && bEnableGrabbing){
-			if(world == NULL) {
-				ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-				return;
-			}
-            world->DestroyJoint(touchJoints[id]);
-            touchJoints[id] = NULL;
-        }
-    }
-#else    
-        if(mouseJoint && bEnableGrabbing) {
-			if(world == NULL) {
-				ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-				return;
-			}
-            world->DestroyJoint(mouseJoint);
-            mouseJoint = NULL;
-        }
-#endif
+	VERIFY_WORLD_INITED();
+
+	// A joint may not have been created on grabDown, so check before attempting destroy
+	if (grabJoints[id]) world->DestroyJoint(grabJoints[id]);
+	grabJoints.erase(id);
+	
+	if (grabBodies[id]) world->DestroyBody(grabBodies[id]);
+	grabBodies.erase(id);
 }
 
 // ------------------------------------------------------ 
 void ofxBox2d::grabShapeDragged(float x, float y, int id) {
-	b2Vec2 p = toB2d(x, y);
-#ifdef TARGET_OPENGLES  
-    if(id >= 0 && id < OF_MAX_TOUCH_JOINTS) {
-        if (touchJoints[id] && bEnableGrabbing)
-            touchJoints[id]->SetTarget(p);
-    }
-#else    
-    	if (mouseJoint && bEnableGrabbing)
-        	mouseJoint->SetTarget(p);
-#endif
-    
-    
+	if (!bEnableGrabbing) return;
+
+	if (grabJoints[id]) {
+		b2Vec2 p = toB2d(x, y);
+		grabJoints[id]->SetTarget(p);
+	}    
 }
 
 // ------------------------------------------------------ 
@@ -352,10 +280,7 @@ int	ofxBox2d::getJointCount() {
 
 // ------------------------------------------------------ wake up
 void ofxBox2d::wakeupShapes() {
-    if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
     b2Body* bodies = world->GetBodyList();
     while(bodies) {
@@ -372,7 +297,7 @@ void ofxBox2d::wakeupShapes() {
 void ofxBox2d::setFPS(float _hz) {
 	hz = _hz;
 	particleIterations = world->CalculateReasonableParticleIterations(hz);
-	ofLogNotice() << "particleIterations " << ofToString(particleIterations);
+	ofLogVerbose(__FUNCTION__) << "particleIterations " << ofToString(particleIterations);
 }
 
 #pragma mark - gravity
@@ -393,15 +318,13 @@ void ofxBox2d::setGravityY(float y) {
 
 //--------------------------------------------------------------
 void ofxBox2d::setGravity(float x, float y) {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
+
 	world->SetGravity(b2Vec2(x, y));
 	
 	// update the particle iteration based on gravity
 	particleIterations = world->CalculateReasonableParticleIterations(hz);
-	ofLogNotice() << "particleIterations " << ofToString(particleIterations);
+	ofLogVerbose(__FUNCTION__) << "particleIterations " << particleIterations;
 	
 	// wake up all shapes!
 	wakeupShapes();
@@ -409,10 +332,7 @@ void ofxBox2d::setGravity(float x, float y) {
 
 //--------------------------------------------------------------
 ofPoint ofxBox2d::getGravity() {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return ofPoint();
-	}
+	VERIFY_WORLD_INITED(ofPoint());
     return ofPoint(world->GetGravity().x, world->GetGravity().y);
 }
 
@@ -423,11 +343,7 @@ void ofxBox2d::setBounds(ofPoint lowBounds, ofPoint upBounds) {
 
 // ------------------------------------------------------ create Ground
 void ofxBox2d::createGround(float x1, float y1, float x2, float y2) {
-	
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
 	// if we have ground we need to destroy it
 	if(ground != NULL) {
@@ -455,11 +371,7 @@ void ofxBox2d::createBounds(ofRectangle rec) {
 
 // ------------------------------------------------------ create bounds
 void ofxBox2d::createBounds(float x, float y, float w, float h) {
-	
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
+	VERIFY_WORLD_INITED();
 	
 	// if we have ground we need to destroy it
 	if(ground != NULL) {
@@ -508,48 +420,7 @@ void ofxBox2d::setIterations(int velocityTimes, int positionTimes) {
 
 // ------------------------------------------------------ 
 void ofxBox2d::update() {
-	if(world == NULL) {
-		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
-		return;
-	}
-	
-	// destroy the object if we are out of the bounds
-	if(bCheckBounds) {
-		/*
-		 float top = 0;
-		 float bottom = ofGetHeight();
-		 float right = ofGetWidth();
-		 float left = 0;
-		 
-		 b2Body* node = world->GetBodyList();
-		 while(node) {
-		 b2Body* b = node;
-		 node = node->GetNext();
-		 b2Vec2 p = b->GetPosition();
-		 ofxBox2dBaseShape* base = (ofxBox2dBaseShape*)b->GetUserData();
-		 if(base) {
-		 //printf("dead:%i\n", base->dead);
-		 
-		 if(p.y*OFX_BOX2D_SCALE > bottom) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 if(p.y*OFX_BOX2D_SCALE < top) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 if(p.x*OFX_BOX2D_SCALE > right) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 if(p.x*OFX_BOX2D_SCALE < left) {
-		 base->dead = true;
-		 world->DestroyBody(b);
-		 }
-		 */
-		
-		
-	}
+	VERIFY_WORLD_INITED();
 	
 	world->Step(getTimeStep(), velocityIterations, positionIterations, particleIterations);
 }
@@ -561,10 +432,8 @@ float ofxBox2d::getTimeStep() {
 
 // ------------------------------------------------------ 
 void ofxBox2d::drawGround() {
-	
 	if(ground == NULL) return;
 	
-// 	const b2Transform& xf = ground->GetTransform();
 	for (b2Fixture* f = ground->GetFixtureList(); f; f = f->GetNext()) {
 		b2EdgeShape * edge = (b2EdgeShape*)f->GetShape();
 		if(edge) {
@@ -580,3 +449,4 @@ void ofxBox2d::draw() {
 	drawGround();
 }
 
+#undef VERIFY_WORLD_INITED

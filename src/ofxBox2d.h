@@ -13,10 +13,6 @@
 #include "ofxBox2dRender.h"
 #include "ofxBox2dContactListener.h"
 
-#ifdef TARGET_OPENGLES
-#define OF_MAX_TOUCH_JOINTS		5			// max number of touch points on iPhone + iPad (this may change in the future though).
-#endif
-
 class ofxBox2dContactArgs : public ofEventArgs {
 public:
 	
@@ -67,13 +63,9 @@ public:
 	b2BodyDef			bd;
 	b2Body*				m_bomb;
 	
-#ifdef TARGET_OPENGLES    
-    b2MouseJoint*		touchJoints[ OF_MAX_TOUCH_JOINTS ];
-    b2Body*		        touchBodies[ OF_MAX_TOUCH_JOINTS ];
-#else
-	b2MouseJoint*		mouseJoint;    
-	b2Body*				mouseBody;
-#endif    
+	map<int, b2MouseJoint*> grabJoints;
+	map<int, b2Body*>       grabBodies;
+
 	b2Body*				ground;
 	b2Body*				mainBody;
 
@@ -116,20 +108,20 @@ public:
 	// this is from liquidfun docs.
 	int calculateParticleIterations(float32 gravity, float32 radius, float32 timeStep);
 	
-	
-	// touching and mouse events
-#ifdef TARGET_OPENGLES
-	void		touchDown(ofTouchEventArgs &touch);
-	void		touchMoved(ofTouchEventArgs &touch);
-	void		touchUp(ofTouchEventArgs &touch);
-#else
-	void		mousePressed(ofMouseEventArgs &e);
-	void		mouseDragged(ofMouseEventArgs &e);
-	void		mouseReleased(ofMouseEventArgs &e);
-#endif
+	// touch and mouse events
+	void touchDown(ofTouchEventArgs &touch);
+	void touchMoved(ofTouchEventArgs &touch);
+	void touchUp(ofTouchEventArgs &touch);
+
+	void mousePressed(ofMouseEventArgs &e);
+	void mouseDragged(ofMouseEventArgs &e);
+	void mouseReleased(ofMouseEventArgs &e);
 	
 	// grabbing shapes
 	void registerGrabbing();
+	void registerMouseGrabbing();
+	void registerTouchGrabbing();
+
 	void grabShapeDown(float x, float y, int id = -1 );		// -1 is reserved for mouse.
 	void grabShapeUp(float x, float y, int id = -1 );		// -1 is reserved for mouse.
 	void grabShapeDragged(float x, float y, int id = -1 );	// -1 is reserved for mouse.
@@ -146,10 +138,10 @@ public:
     // get timestep
     float getTimeStep();
     
-	// grabbing of shapes with mouse
+	// grabbing of shapes
 	void enableGrabbing()  { bEnableGrabbing = true;  };
 	void disableGrabbing() { bEnableGrabbing = false; };
-	
+
 	// contact listening
 	void setContactListener(ofxBox2dContactListener * listener);
 	
