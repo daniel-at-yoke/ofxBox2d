@@ -119,6 +119,9 @@ public:
 	
 	// grabbing shapes
 	void registerGrabbing();
+	void registerMouseGrabbing();
+	void registerTouchGrabbing();
+
 	void grabShapeDown(float x, float y, int id = -1 );		// -1 is reserved for mouse.
 	void grabShapeUp(float x, float y, int id = -1 );		// -1 is reserved for mouse.
 	void grabShapeDragged(float x, float y, int id = -1 );	// -1 is reserved for mouse.
@@ -135,10 +138,10 @@ public:
     // get timestep
     float getTimeStep();
     
-	// grabbing of shapes with mouse
+	// grabbing of shapes
 	void enableGrabbing()  { bEnableGrabbing = true;  };
 	void disableGrabbing() { bEnableGrabbing = false; };
-	
+
 	// contact listening
 	void setContactListener(ofxBox2dContactListener * listener);
 	

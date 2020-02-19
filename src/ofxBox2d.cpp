@@ -103,7 +103,7 @@ void ofxBox2d::init(float _hz, float _gx, float _gy) {
 	// settings
 	bHasContactListener = false;
 	bCheckBounds		= false;
-	bEnableGrabbing		= true;
+	bEnableGrabbing     = true;
 	ofxBox2d::scale		= 30.0f;
 	doSleep				= true;
 	
@@ -165,13 +165,22 @@ void ofxBox2d::setContactListener(ofxBox2dContactListener * listener) {
 
 // ------------------------------------------------------ grab shapes Events
 void ofxBox2d::registerGrabbing() {
-	ofAddListener(ofEvents().touchDown, this, &ofxBox2d::touchDown);
-	ofAddListener(ofEvents().touchMoved, this, &ofxBox2d::touchMoved);
-	ofAddListener(ofEvents().touchUp, this, &ofxBox2d::touchUp);
+	registerMouseGrabbing();
+	registerTouchGrabbing();
+}
 
+// ------------------------------------------------------ grab shapes Events
+void ofxBox2d::registerMouseGrabbing() {
 	ofAddListener(ofEvents().mousePressed, this, &ofxBox2d::mousePressed);
 	ofAddListener(ofEvents().mouseDragged, this, &ofxBox2d::mouseDragged);
 	ofAddListener(ofEvents().mouseReleased, this, &ofxBox2d::mouseReleased);
+}
+
+// ------------------------------------------------------ grab shapes Events
+void ofxBox2d::registerTouchGrabbing() {
+	ofAddListener(ofEvents().touchDown, this, &ofxBox2d::touchDown);
+	ofAddListener(ofEvents().touchMoved, this, &ofxBox2d::touchMoved);
+	ofAddListener(ofEvents().touchUp, this, &ofxBox2d::touchUp);
 }
 
 void ofxBox2d::touchDown(ofTouchEventArgs &touch) {
@@ -248,8 +257,6 @@ void ofxBox2d::grabShapeUp(float x, float y, int id) {
 		ofLog(OF_LOG_WARNING, "ofxBox2d:: - Need a world, call init first! -");
 		return;
 	}
-
-	if (!bEnableGrabbing) return;
 
 	if (grabJoints[id]) {
 		world->DestroyJoint(grabJoints[id]);
