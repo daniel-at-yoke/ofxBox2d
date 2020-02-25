@@ -52,6 +52,7 @@ void ofxBox2d::clear() {
 
 	// destroy grabbing bodies and joints
 	for (pair<int, b2MouseJoint*> pair : grabJoints) {
+		if (!pair.second) continue;
 		world->DestroyJoint(pair.second);
 	}
 
